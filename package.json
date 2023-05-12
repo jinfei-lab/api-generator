@@ -1,6 +1,6 @@
 {
   "name": "swagger3-api-generator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "swagger接口生成",
   "main": "js/index.js",
   "scripts": {
@@ -8,6 +8,9 @@
   },
   "author": "jf",
   "license": "ISC",
+  "bin": {
+    "generate": "./js/index.js"
+  },
   "dependencies": {
     "chalk": "^4.0.0",
     "swagger-parser": "^10.0.3"
