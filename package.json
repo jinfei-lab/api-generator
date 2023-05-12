@@ -1,6 +1,6 @@
 {
   "name": "swagger3-api-generator",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "swagger接口生成",
   "main": "js/index.js",
   "scripts": {
