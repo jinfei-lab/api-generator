@@ -9,7 +9,7 @@
   "author": "jf",
   "license": "ISC",
   "bin": {
-    "generate": "./js/index.js"
+    "generate": "js/index.js"
   },
   "dependencies": {
     "chalk": "^4.0.0",
