@@ -1,0 +1,15 @@
+{
+  "name": "api-generator",
+  "version": "1.0.0",
+  "description": "swagger接口生成",
+  "main": "js/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "jf",
+  "license": "ISC",
+  "dependencies": {
+    "chalk": "^4.0.0",
+    "swagger-parser": "^10.0.3"
+  }
+}
