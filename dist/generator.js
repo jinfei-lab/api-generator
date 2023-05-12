@@ -245,4 +245,4 @@ const generateApiFile = async () => {
 };
 
 // 开始分析swagger并生成接口文件
-// generateApiFile();
+module.exports = generateApiFile();
