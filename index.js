@@ -1,2 +1,3 @@
-const generateApiFile = require('./dist/generator.js');
+#!/usr/bin/env node
+import generateApiFile from "./dist/generator.js";
 generateApiFile();

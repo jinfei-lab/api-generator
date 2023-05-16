@@ -1,8 +1,11 @@
-const fs = require("fs");
-const chalk = require("chalk");
-const parse = require("swagger-parser");
-const path = require("path");
-const { topConfig, apiConfig, fileDoc } = require("./config.js");
+import { topConfig, apiConfig, fileDoc } from "./conf.js";
+import fs from "fs";
+import path from "path";
+import chalk from "chalk";
+import parse from "swagger-parser";
+import { fileURLToPath } from "url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 console.log(
   chalk.yellow(
@@ -26,7 +29,7 @@ console.log(
       "======`-.____`-.___\\_____/___.-`____.-'======",
       "                   `=---='",
       "            佛祖保佑       永无BUG",
-      "🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏",
+      "🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏🙏\n",
     ].join("\n")
   )
 );
@@ -84,10 +87,8 @@ const dataType = (key) => {
 
 // 获取模块
 const getModules = (map) => {
-  let moduleList = [];
   map.forEach((value, key) => {
-    const module = writeFileApi(key, value);
-    // moduleList = [...moduleList, ...module];
+    writeFileApi(key, value);
   });
   console.log(chalk.green("----------------------------------------------"));
   console.log(chalk.green("导出成功！"));
@@ -95,6 +96,7 @@ const getModules = (map) => {
 
 // 参数item类型
 const interfaceParamsList = (params) => {
+  console.log(99, params);
   let str = "";
   params.forEach((item) => {
     str = `${str}
@@ -161,24 +163,13 @@ const writeSingleTemplate = (apiInfo) => {
   );
 };
 
-// 接口名称（使用operationId）
-const getModulesName = (apiInfo) => {
-  const keys = Object.keys(apiInfo);
-  const methodType = keys[0];
-  const methodParams = apiInfo[methodType];
-  const operationId = methodParams.operationId;
-  return operationId;
-};
-
 // 写入文件
 const writeFileApi = (fileName, interfaceData) => {
   // 设置文件顶部配置（如引入axios/定义响应类型等）
   let fileTemplate = topConfig;
-  let moduleList = [];
   for (let i = 0; i < interfaceData.length; i++) {
     const item = interfaceData[i];
     fileTemplate = `${fileTemplate}\n${writeSingleTemplate(item)}`;
-    moduleList.push(getModulesName(item));
   }
   fileTemplate = `${writeHeaderDoc(interfaceData[0])}\n\n${fileTemplate}`;
   fs.writeFileSync(`${API_PATH}/${fileName}.ts`, fileTemplate);
@@ -186,11 +177,10 @@ const writeFileApi = (fileName, interfaceData) => {
     chalk.blue(
       `${fileName}.ts` +
         chalk.green(" ------------ ") +
-        chalk.black("[" + interfaceData.length + "]") +
+        chalk.yellow("[" + interfaceData.length + "]") +
         chalk.green("个接口写入完成")
     )
   );
-  return moduleList;
 };
 
 // 生成接口文件主函数
@@ -198,7 +188,17 @@ const generateApiFile = async () => {
   // 先删除已经生成的文件
   removeDir(API_PATH);
   // 检测目标文件夹是否存在
-  isDirExist();
+  try {
+    isDirExist();
+  } catch (error) {
+    console.log(chalk.red("程序终止："));
+    console.log(
+      chalk.red(
+        "创建文件夹失败！请检查package.json/config.apiPath路径是否正确！"
+      )
+    );
+    return;
+  }
   try {
     // 解析url获得
     let parsed = await parse.parse(process.env.npm_package_config_swaggerUrl);
@@ -218,11 +218,9 @@ const generateApiFile = async () => {
       for (let i = 0; i < Object.keys(paths[item]).length; i++) {
         methodKey = Object.keys(paths[item])[i];
       }
-      const methodTypeObject = paths[item][methodKey];
       const itemAry = item.split("/");
       const pathsItem = paths[item];
       let fileName = itemAry[2];
-      let fileDesc = methodTypeObject.tags[0];
       if (!fileName) {
         continue;
       }
@@ -231,7 +229,9 @@ const generateApiFile = async () => {
       if (modulesMap.has(fileName)) {
         // 继续添加到当前 fileName 文件内
         const fileNameAry = modulesMap.get(fileName);
+        // 相同前缀的接口放在同一个文件内
         fileNameAry.push(pathsItem);
+        // 重新设置
         modulesMap.set(fileName, fileNameAry);
       } else {
         modulesMap.set(fileName, [pathsItem]);
@@ -240,9 +240,15 @@ const generateApiFile = async () => {
     // 获取模块，并写入文件
     getModules(modulesMap);
   } catch (e) {
-    console.log(e);
+    console.log(chalk.red("程序终止："));
+    console.log(
+      chalk.red(
+        "swagger地址请求失败！请检查package.json/config.swaggerUrl是否正确！"
+      )
+    );
+    return;
   }
 };
 
 // 开始分析swagger并生成接口文件
-module.exports = generateApiFile();
+export default generateApiFile;
