@@ -3,7 +3,12 @@ import fs from "fs";
 import path from "path";
 import chalk from "chalk";
 import parse from "swagger-parser";
+import prettier from "prettier";
 import { fileURLToPath } from "url";
+import { prettierConfig } from "./prettierConfig.js";
+import { generateType } from "./generateType.js";
+import { getCamelCaseString, isReservedWord, dataType } from "./utils.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -67,120 +72,195 @@ const removeDir = (dir) => {
   }
 };
 
-// 设置接口名称
-const setInterfaceName = (operationId) => {
-  return operationId.replace(/Using(POST|GET)/g, "");
-};
-// 数据类型
-const dataType = (key) => {
-  const type = {
-    string: "string",
-    integer: "number",
-    int: "number",
-    long: "string",
-    Array: "array",
-    file: "Blob",
-    boolean: "boolean",
-  };
-  return type[key] ? type[key] : "any";
+/**
+ * 此函数将API路径按其标签分组，并返回一个对象，其中标签为键，包含路径、方法、标签、摘要和操作ID的对象数组为值。
+ * @param {Object} paths - 包含API路径的对象。
+ * @returns {Object} - 具有标签作为键和包含路径、方法、标签、摘要和操作ID的对象数组为值的对象。
+ */
+const groupedData = (paths) =>
+  Object.entries(paths).reduce((result, [path, methodObj]) => {
+    const method = Object.keys(methodObj)[0];
+    const { tags, summary, operationId, parameters, requestBody, responses } =
+      methodObj[method];
+
+    tags.forEach((tag) => {
+      if (!result[tag]) {
+        result[tag] = [];
+      }
+      result[tag].push({
+        path,
+        method,
+        tags,
+        summary,
+        operationId,
+        parameters,
+        requestBody,
+        responses,
+      });
+    });
+
+    return result;
+  }, {});
+
+/**
+ * 通过查找每个标签的路径中的公共路径并将其转换为驼峰式来更新分组数据。
+ * @param {Object} groupedData - 具有标签作为键和包含路径、方法、标签、摘要和操作ID的对象数组为值的对象。
+ * @returns {Object} - 具有每个标签路径中的公共路径转换为驼峰式作为键和包含路径、方法、标签、摘要和操作ID的对象数组为值的对象。
+ */
+const transformGroupedData = (groupedData) => {
+  const updatedGroupedData = {};
+  for (const section in groupedData) {
+    const sectionData = groupedData[section];
+    const paths = sectionData.map((item) => item.path);
+    let commonPath = "";
+    if (paths.length > 0) {
+      const firstPath = paths[0];
+      for (let i = 0; i < firstPath.length; i++) {
+        const char = firstPath.charAt(i);
+        if (paths.every((path) => path.charAt(i) === char)) {
+          commonPath += char;
+        } else {
+          break;
+        }
+      }
+    }
+    const lastSlashIndex = commonPath.lastIndexOf("/");
+    if (lastSlashIndex >= 0) {
+      commonPath = commonPath.substring(0, lastSlashIndex + 1);
+    }
+    let commonPathAry = commonPath.split("/").filter((item) => item !== "");
+    if (commonPathAry.length > 1) {
+      commonPathAry.splice(0, 1);
+    }
+
+    commonPath = getCamelCaseString(commonPathAry.join("/"));
+    updatedGroupedData[commonPath] = sectionData;
+  }
+
+  return updatedGroupedData;
 };
 
-// 获取模块
-const getModules = (map) => {
-  map.forEach((value, key) => {
-    writeFileApi(key, value);
+/**
+ * 生成接口文件
+ * @param {Object} apiData - 包含API路径的对象。
+ */
+const generateFiles = (apiData) => {
+  Object.keys(apiData).forEach((fileName) => {
+    const interfaceData = apiData[fileName];
+    const singleTemplate = generateSingleFile(interfaceData);
+    fs.writeFileSync(`${API_PATH}/${fileName}.ts`, `${singleTemplate}`);
   });
-  console.log(chalk.green("----------------------------------------------"));
-  console.log(chalk.green("导出成功！"));
 };
 
-// 参数item类型
-const interfaceParamsList = (params) => {
-  console.log(99, params);
-  let str = "";
-  params.forEach((item) => {
-    str = `${str}
-      /** ${item.description ? item.description : ""} **/
-      ${item.name}${item.required ? "?" : ""}: ${dataType(item.type)}; 
-    `;
+/**
+ * 生成单个接口文件的模板
+ * @returns {String} 单个接口文件的模板
+ */
+const generateSingleFile = (interfaceData) => {
+  let fileTemplate = "";
+  let singleTemplate = "";
+  let typeTemplate = [];
+  let fileDoc = "";
+  interfaceData.map((item) => {
+    let interfaceName = "any"; // 定义接口name
+    let interfaceParams = "data?: any"; // 定义参数及类型
+    let parametersType = "data"; // 请求类型
+    // console.log(item);
+    // post请求默认为json传参
+    if (item.requestBody) {
+      // 正常的post/put请求
+      let schema = item.requestBody.content["application/json"].schema;
+      if (schema["$ref"]) {
+        let schemaArray = schema["$ref"].split("/");
+        interfaceName = schemaArray[schemaArray.length - 1];
+        // typeTemplate += `${interfaceName},`;
+        typeTemplate.push(interfaceName);
+        interfaceParams = `data${
+          item.requestBody.required ? "" : "?"
+        }: ${interfaceName}`;
+      } else {
+        Object.keys(schema.properties).map((x) => {
+          if (schema.properties[x].format === "binary") {
+            interfaceParams = `data: FormData`;
+            parametersType = "data";
+          }
+        });
+      }
+    } else {
+      interfaceName = ``;
+      interfaceParams = ``;
+      parametersType = ``;
+    }
+
+    // get/delete请求参数放在params中
+    if (
+      item.method.toLocaleLowerCase() === "get" ||
+      item.method.toLocaleLowerCase() === "delete"
+    ) {
+      let queryParameters = item.parameters.filter((x) => x.in !== "header");
+      if (queryParameters.length > 0) {
+        interfaceName = ``;
+        parametersType = ``;
+        queryParameters.map((x, i) => {
+          if (x.in !== "path") {
+            parametersType = "params";
+          }
+          if (x.schema.type) {
+            interfaceName +=
+              `${i === 0 ? "{" : ""}` +
+              `${x.name}${x.required ? "" : "?"}: ${dataType(x.schema.type)}` +
+              `${i !== queryParameters.length - 1 ? ";" : ""}` +
+              `${i === queryParameters.length - 1 ? "}" : ""}`;
+          } else if (x.schema.$ref) {
+            let schemaArray = x.schema.$ref.split("/");
+            interfaceName = schemaArray[schemaArray.length - 1];
+            // typeTemplate += `${interfaceName},`;
+            typeTemplate.push(interfaceName);
+          }
+        });
+        // interfaceName = `${interfaceName}`;
+        interfaceParams = `params: ${interfaceName}`;
+      } else {
+        parametersType = ``;
+        interfaceParams = ``;
+      }
+    }
+
+    // 处理接口名称
+    let requestName = "";
+    if (!isReservedWord(item.operationId)) {
+      requestName = item.operationId;
+    } else {
+      let requestPathArray = item.path.split("/").filter((x) => x !== "");
+      requestPathArray = requestPathArray
+        .map((x) => {
+          if (x.indexOf("{") === -1 && x.indexOf("}") === -1) {
+            return x;
+          }
+        })
+        .filter((x) => x);
+      requestName = getCamelCaseString(
+        requestPathArray[requestPathArray.length - 2] +
+          "/" +
+          requestPathArray[requestPathArray.length - 1]
+      );
+    }
+    singleTemplate += `${apiConfig(
+      item.summary,
+      requestName,
+      interfaceParams,
+      item.method,
+      item.path,
+      parametersType
+    )}\n`;
   });
-  return str;
-};
-
-// 定义参数类型
-const interfaceParamsTpl = (params, interfaceName) => {
-  if (!params || params.length === 0) {
-    return "";
-  } else {
-    return `interface ${interfaceName} {
-      ${interfaceParamsList(params)}
-    }`;
+  typeTemplate = Array.from(new Set(typeTemplate));
+  if (typeTemplate.length) {
+    typeTemplate = `import {${typeTemplate.toString()}} from "./typings"`;
   }
-};
-
-// 写入文件头部注释
-const writeHeaderDoc = (apiInfo) => {
-  const keys = Object.keys(apiInfo);
-  // 请求类型
-  const methodType = keys[0];
-  const methodParams = apiInfo[methodType];
-  const parameterTag = methodParams.tags[0]; // 接口参数
-  return fileDoc(parameterTag);
-};
-
-// 写入单个接口模板
-const writeSingleTemplate = (apiInfo) => {
-  const keys = Object.keys(apiInfo);
-  const methodType = keys[0]; // 请求类型
-  const methodParams = apiInfo[methodType];
-  const parameters = methodParams.parameters; // 接口参数
-  const operationId = methodParams.operationId;
-  const allPath = apiInfo.allPath; // 接口地址
-  const summary = methodParams.summary; // 接口描述
-  const requestName = setInterfaceName(operationId); // 接口名称格式化
-
-  let interfaceName = "any"; // 定义接口name
-  let interfaceParams = "data?: any"; // 定义参数及类型
-  let parametersType = "data"; // 请求类型
-
-  if (parameters && parameters.length > 0) {
-    interfaceName = `${requestName}Ife`;
-    interfaceParams = `data?: ${interfaceName}`;
-  }
-  // get请求默认为json传参
-  if (methodType.toLocaleLowerCase() === "get") {
-    parametersType = "params";
-    interfaceParams = `params?: ${interfaceName}`;
-  }
-  return apiConfig(
-    summary,
-    interfaceParamsTpl(parameters, interfaceName),
-    requestName,
-    interfaceParams,
-    methodType,
-    allPath,
-    parametersType
-  );
-};
-
-// 写入文件
-const writeFileApi = (fileName, interfaceData) => {
-  // 设置文件顶部配置（如引入axios/定义响应类型等）
-  let fileTemplate = topConfig;
-  for (let i = 0; i < interfaceData.length; i++) {
-    const item = interfaceData[i];
-    fileTemplate = `${fileTemplate}\n${writeSingleTemplate(item)}`;
-  }
-  fileTemplate = `${writeHeaderDoc(interfaceData[0])}\n\n${fileTemplate}`;
-  fs.writeFileSync(`${API_PATH}/${fileName}.ts`, fileTemplate);
-  console.log(
-    chalk.blue(
-      `${fileName}.ts` +
-        chalk.green(" ------------ ") +
-        chalk.yellow("[" + interfaceData.length + "]") +
-        chalk.green("个接口写入完成")
-    )
-  );
+  fileDoc = `/**\n * @description ${interfaceData[0]["tags"].toString()}\n */`;
+  fileTemplate = `${fileDoc}\n\n${topConfig}\n${typeTemplate}\n${singleTemplate}`;
+  return prettier.format(fileTemplate, prettierConfig);
 };
 
 // 生成接口文件主函数
@@ -199,55 +279,25 @@ const generateApiFile = async () => {
     );
     return;
   }
-  try {
-    // 解析url获得
-    let parsed = await parse.parse(process.env.npm_package_config_swaggerUrl);
-    const paths = parsed.paths;
-    const pathsKeys = Object.keys(paths);
-    const pathsKeysLen = pathsKeys.length;
-    console.log(" ");
-    console.log(
-      chalk.blue("开始解析，总共接口数量：") + chalk.yellow(pathsKeysLen)
-    );
-    console.log(chalk.red("----------------------------------------------"));
+  // 解析url获得
+  let parsed = await parse.parse(process.env.npm_package_config_swaggerUrl);
+  // 类型文件生成
+  const components = parsed.components;
+  generateType(components);
 
-    const modulesMap = new Map();
-    for (let i = 0; i < pathsKeysLen; i++) {
-      const item = pathsKeys[i];
-      let methodKey = "";
-      for (let i = 0; i < Object.keys(paths[item]).length; i++) {
-        methodKey = Object.keys(paths[item])[i];
-      }
-      const itemAry = item.split("/");
-      const pathsItem = paths[item];
-      let fileName = itemAry[2];
-      if (!fileName) {
-        continue;
-      }
-      fileName = fileName.toLowerCase();
-      pathsItem.allPath = item;
-      if (modulesMap.has(fileName)) {
-        // 继续添加到当前 fileName 文件内
-        const fileNameAry = modulesMap.get(fileName);
-        // 相同前缀的接口放在同一个文件内
-        fileNameAry.push(pathsItem);
-        // 重新设置
-        modulesMap.set(fileName, fileNameAry);
-      } else {
-        modulesMap.set(fileName, [pathsItem]);
-      }
-    }
-    // 获取模块，并写入文件
-    getModules(modulesMap);
-  } catch (e) {
-    console.log(chalk.red("程序终止："));
-    console.log(
-      chalk.red(
-        "swagger地址请求失败！请检查package.json/config.swaggerUrl是否正确！"
-      )
-    );
-    return;
-  }
+  // 接口文件生成
+  const paths = parsed.paths;
+  const pathsKeys = Object.keys(paths);
+  const pathsKeysLen = pathsKeys.length;
+  console.log(" ");
+  console.log(
+    chalk.blue("开始解析，总共接口数量：") + chalk.yellow(pathsKeysLen)
+  );
+  console.log(chalk.red("----------------------------------------------"));
+
+  // 处理swagger数据
+  const updatedGroupedData = transformGroupedData(groupedData(paths));
+  generateFiles(updatedGroupedData);
 };
 
 // 开始分析swagger并生成接口文件

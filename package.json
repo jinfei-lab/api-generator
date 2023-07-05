@@ -17,6 +17,7 @@
     "@apidevtools/json-schema-ref-parser": "^10.1.0",
     "chalk": "^4.0.0",
     "node-fetch": "^3.3.1",
-    "swagger-parser": "^10.0.3"
+    "swagger-parser": "^10.0.3",
+    "prettier": "2.8.8"
   }
 }

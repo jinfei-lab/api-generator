@@ -4,7 +4,7 @@
 
 ```jsona
 "config": {
-    "swaggerUrl": "http://192.168.x.x/maotiao_backend/v3/api-docs/%E7%9F%9B%E8%B0%83",
+    "swaggerUrl": "http://192.168.x.x/maotiao_backend/v3/api-docs/all",
     "apiPath": "/src/api",
-    "httpDirPath": "@/utils/request"
+    "httpDirPath": "@/utils/axios"
 }
