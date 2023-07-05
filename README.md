@@ -8,3 +8,8 @@
     "apiPath": "/src/api",
     "httpDirPath": "@/utils/axios"
 }
+
+在script中添加
+"script": {
+    "generate":"node generate"
+}
