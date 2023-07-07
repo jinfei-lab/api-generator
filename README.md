@@ -13,6 +13,6 @@
 
 <pre>
 "script": {
-    "generate":"node generate"
+    "generate":"generate"
 }
 </pre>

@@ -355,12 +355,22 @@ const interfaceTemplate = (interfaceName, interfaceParams) => {
     let propertyKeys = Object.keys(interfaceParams.properties);
     propertyKeys.forEach((propertyKey) => {
       let property = interfaceParams.properties[propertyKey];
-      if (property.description) {
-        parametersTemplate += `// ${
-          property.description
-        }\n${propertyKey}: ${dataType(property.type)}\n`;
+      if (property.items) {
+        parametersTemplate +=
+          `${
+            property.description
+              ? "// " + property.description + "\n" + propertyKey
+              : propertyKey
+          }` +
+          ":" +
+          `${dataType(property.type)}` +
+          `<${dataType(property.items.type)}>\n`;
       } else {
-        parametersTemplate += `${propertyKey}: ${dataType(property.type)}\n`;
+        parametersTemplate += `${
+          property.description
+            ? "// " + property.description + "\n" + propertyKey
+            : propertyKey
+        }: ${dataType(property.type)}\n`;
       }
     });
     parametersTemplate = `{\n${parametersTemplate}}`;

@@ -41,22 +41,28 @@ export const generateType = (data) => {
  * @return {*} 类型模板
  */
 const interfaceTemplate = (interfaceName, interfaceParams) => {
-  // 基础类型模板
   let baseTemplate = `export type ${interfaceName} = `;
-  // 注释模板
   let parametersTemplate = ``;
-  // 如果有参数就遍历参数
   if (interfaceParams.properties) {
     let propertyKeys = Object.keys(interfaceParams.properties);
     propertyKeys.forEach((propertyKey) => {
       let property = interfaceParams.properties[propertyKey];
-      // 如果有注释就加上注释
-      if (property.description) {
-        parametersTemplate += `// ${
-          property.description
-        }\n${propertyKey}: ${dataType(property.type)}\n`;
+      if (property.items) {
+        parametersTemplate +=
+          `${
+            property.description
+              ? "// " + property.description + "\n" + propertyKey
+              : propertyKey
+          }` +
+          ":" +
+          `${dataType(property.type)}` +
+          `<${dataType(property.items.type)}>\n`;
       } else {
-        parametersTemplate += `${propertyKey}: ${dataType(property.type)}\n`;
+        parametersTemplate += `${
+          property.description
+            ? "// " + property.description + "\n" + propertyKey
+            : propertyKey
+        }: ${dataType(property.type)}\n`;
       }
     });
     parametersTemplate = `{\n${parametersTemplate}}`;
