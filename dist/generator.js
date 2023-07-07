@@ -103,83 +103,123 @@ const groupedData = (paths) =>
   }, {});
 
 /**
- * 通过查找每个标签的路径中的公共路径并将其转换为驼峰式来更新分组数据。
+ * 此函数将分组数据转换为具有公共路径将其转换为驼峰式的新对象。
  * @param {Object} groupedData - 具有标签作为键和包含路径、方法、标签、摘要和操作ID的对象数组为值的对象。
- * @returns {Object} - 具有每个标签路径中的公共路径转换为驼峰式作为键和包含路径、方法、标签、摘要和操作ID的对象数组为值的对象。
+ * @returns {Object} - 具有公共路径作为键和包含路径、方法、标签、摘要和操作ID的对象数组为值的对象。
  */
 const transformGroupedData = (groupedData) => {
+  // 创建一个新对象来存储更新后的分组数据
   const updatedGroupedData = {};
+  // 遍历每个标签
   for (const section in groupedData) {
+    // 获取标签下的所有接口数据
     const sectionData = groupedData[section];
+    // 获取标签下所有接口的路径
     const paths = sectionData.map((item) => item.path);
+    // 初始化公共路径为空字符串
     let commonPath = "";
+    // 如果路径数组不为空
     if (paths.length > 0) {
+      // 获取第一个路径
       const firstPath = paths[0];
+      // 遍历第一个路径的每个字符
       for (let i = 0; i < firstPath.length; i++) {
+        // 获取当前字符
         const char = firstPath.charAt(i);
+        // 如果所有路径的当前字符都相同，则将其添加到公共路径中
         if (paths.every((path) => path.charAt(i) === char)) {
           commonPath += char;
         } else {
+          // 如果当前字符不同，则退出循环
           break;
         }
       }
     }
+    // 获取公共路径中最后一个斜杠的索引
     const lastSlashIndex = commonPath.lastIndexOf("/");
+    // 如果存在斜杠，则将其截断
     if (lastSlashIndex >= 0) {
       commonPath = commonPath.substring(0, lastSlashIndex + 1);
     }
+    // 将公共路径转换为驼峰式字符串
     let commonPathAry = commonPath.split("/").filter((item) => item !== "");
     if (commonPathAry.length > 1) {
       commonPathAry.splice(0, 1);
     }
-
     commonPath = getCamelCaseString(commonPathAry.join("/"));
+    // 将更新后的分组数据添加到新对象中
     updatedGroupedData[commonPath] = sectionData;
   }
-
+  // 返回更新后的分组数据
   return updatedGroupedData;
 };
 
 /**
- * 生成接口文件
+ * 生成所有接口文件的函数
  * @param {Object} apiData - 包含API路径的对象。
+ * @param {Object} components - 包含Swagger组件的对象。
  */
-const generateFiles = (apiData) => {
+const generateFiles = (apiData, components) => {
+  // 遍历每个接口文件
   Object.keys(apiData).forEach((fileName) => {
+    // 获取接口数据
     const interfaceData = apiData[fileName];
-    const singleTemplate = generateSingleFile(interfaceData);
-    fs.writeFileSync(`${API_PATH}/${fileName}.ts`, `${singleTemplate}`);
+    // 生成单个接口文件和类型文件的模板
+    const { apiFileTemplete, typeFileTemplate } = generateSingleFile(
+      interfaceData,
+      components
+    );
+    // 设置接口文件存放目录
+    let fileDir = `${API_PATH}/${fileName}`;
+    // 创建目录
+    fs.mkdirSync(`${fileDir}`, { recursive: true });
+    // 打印接口文件信息
+    console.log(
+      chalk.whiteBright(`\n📁 ${fileName} [${interfaceData[0].tags}]`)
+    );
+    // 写入接口文件
+    fs.writeFileSync(`${fileDir}/index.ts`, `${apiFileTemplete}`);
+    console.log(chalk.whiteBright(`   |`));
+    console.log(chalk.whiteBright(`   |__ 📄 index.ts`));
+    // 如果存在类型文件，则写入类型文件
+    if (typeFileTemplate) {
+      fs.writeFileSync(`${fileDir}/type.ts`, `${typeFileTemplate}`);
+      console.log(chalk.whiteBright(`   |`));
+      console.log(chalk.whiteBright(`   |__ 📄 type.ts`));
+    }
   });
+  // 打印生成成功信息
+  console.log(chalk.green("\n🎉🎉🎉🎉🎉🎉🎉🎉🎉 生成成功 🎉🎉🎉🎉🎉🎉🎉🎉🎉"));
 };
 
 /**
  * 生成单个接口文件的模板
  * @returns {String} 单个接口文件的模板
  */
-const generateSingleFile = (interfaceData) => {
-  let fileTemplate = "";
-  let singleTemplate = "";
-  let typeTemplate = [];
-  let fileDoc = "";
+const generateSingleFile = (interfaceData, components) => {
+  let fileTemplate = ""; // 接口文件模板
+  let singleTemplate = ""; // 单个接口模板
+  let typeTemplate = []; // 类型
+  let fileDoc = ""; //  接口文件注释
+  let typeFileTemplate = ""; // 类型文件模板
   interfaceData.map((item) => {
     let interfaceName = "any"; // 定义接口name
     let interfaceParams = "data?: any"; // 定义参数及类型
     let parametersType = "data"; // 请求类型
-    // console.log(item);
-    // post请求默认为json传参
+    // 如果存在请求体
     if (item.requestBody) {
-      // 正常的post/put请求
       let schema = item.requestBody.content["application/json"].schema;
+      // 如果请求体是引用类型
       if (schema["$ref"]) {
         let schemaArray = schema["$ref"].split("/");
         interfaceName = schemaArray[schemaArray.length - 1];
-        // typeTemplate += `${interfaceName},`;
         typeTemplate.push(interfaceName);
         interfaceParams = `data${
           item.requestBody.required ? "" : "?"
         }: ${interfaceName}`;
       } else {
         Object.keys(schema.properties).map((x) => {
+          // 如果请求体中的参数是binary类型
           if (schema.properties[x].format === "binary") {
             interfaceParams = `data: FormData`;
             parametersType = "data";
@@ -192,7 +232,7 @@ const generateSingleFile = (interfaceData) => {
       parametersType = ``;
     }
 
-    // get/delete请求参数放在params中
+    // 如果存在query参数
     if (
       item.method.toLocaleLowerCase() === "get" ||
       item.method.toLocaleLowerCase() === "delete"
@@ -201,25 +241,53 @@ const generateSingleFile = (interfaceData) => {
       if (queryParameters.length > 0) {
         interfaceName = ``;
         parametersType = ``;
-        queryParameters.map((x, i) => {
-          if (x.in !== "path") {
-            parametersType = "params";
+        let requestPathArray = item.path.split("/").filter((x) => x !== "");
+        for (let j = 0; j < requestPathArray.length; j++) {
+          if (
+            requestPathArray[j].indexOf("{") !== -1 &&
+            requestPathArray[j].indexOf("}") !== -1
+          ) {
+            requestPathArray[j] = "$" + requestPathArray[j];
           }
-          if (x.schema.type) {
-            interfaceName +=
-              `${i === 0 ? "{" : ""}` +
-              `${x.name}${x.required ? "" : "?"}: ${dataType(x.schema.type)}` +
-              `${i !== queryParameters.length - 1 ? ";" : ""}` +
-              `${i === queryParameters.length - 1 ? "}" : ""}`;
-          } else if (x.schema.$ref) {
-            let schemaArray = x.schema.$ref.split("/");
-            interfaceName = schemaArray[schemaArray.length - 1];
-            // typeTemplate += `${interfaceName},`;
-            typeTemplate.push(interfaceName);
+        }
+        item.path = requestPathArray.join("/");
+        queryParameters.map((x, i) => {
+          if (x.in === "path") {
+            if (x.schema.type) {
+              // 如果存在泛型
+              if (x.schema.items) {
+                interfaceName +=
+                  `${x.name}${x.required ? "" : "?"}: ${dataType(
+                    x.schema.type
+                  )}` +
+                  `<${dataType(x.schema.items.type)}>` +
+                  `${i !== queryParameters.length - 1 ? "," : ""}`;
+              } else {
+                interfaceName +=
+                  `${x.name}${x.required ? "" : "?"}: ${dataType(
+                    x.schema.type
+                  )}` + `${i !== queryParameters.length - 1 ? "," : ""}`;
+              }
+            }
+            interfaceParams = `${interfaceName}`;
+          } else {
+            parametersType = "params";
+            if (x.schema.type) {
+              interfaceName +=
+                `${i === 0 ? "{" : ""}` +
+                `${x.name}${x.required ? "" : "?"}: ${dataType(
+                  x.schema.type
+                )}` +
+                `${i !== queryParameters.length - 1 ? ";" : ""}` +
+                `${i === queryParameters.length - 1 ? "}" : ""}`;
+            } else if (x.schema.$ref) {
+              let schemaArray = x.schema.$ref.split("/");
+              interfaceName = schemaArray[schemaArray.length - 1];
+              typeTemplate.push(interfaceName);
+            }
+            interfaceParams = `params: ${interfaceName}`;
           }
         });
-        // interfaceName = `${interfaceName}`;
-        interfaceParams = `params: ${interfaceName}`;
       } else {
         parametersType = ``;
         interfaceParams = ``;
@@ -228,6 +296,7 @@ const generateSingleFile = (interfaceData) => {
 
     // 处理接口名称
     let requestName = "";
+    // 如果接口名称不是保留字
     if (!isReservedWord(item.operationId)) {
       requestName = item.operationId;
     } else {
@@ -245,6 +314,7 @@ const generateSingleFile = (interfaceData) => {
           requestPathArray[requestPathArray.length - 1]
       );
     }
+    item.path = "`" + item.path + "`";
     singleTemplate += `${apiConfig(
       item.summary,
       requestName,
@@ -256,11 +326,47 @@ const generateSingleFile = (interfaceData) => {
   });
   typeTemplate = Array.from(new Set(typeTemplate));
   if (typeTemplate.length) {
-    typeTemplate = `import {${typeTemplate.toString()}} from "./typings"`;
+    typeTemplate.map((item) => {
+      typeFileTemplate += `${interfaceTemplate(
+        item,
+        components["schemas"][item]
+      )}\n\n`;
+    });
+    typeTemplate = `import {${typeTemplate.toString()}} from "./type"`;
   }
   fileDoc = `/**\n * @description ${interfaceData[0]["tags"].toString()}\n */`;
   fileTemplate = `${fileDoc}\n\n${topConfig}\n${typeTemplate}\n${singleTemplate}`;
-  return prettier.format(fileTemplate, prettierConfig);
+  return {
+    apiFileTemplete: prettier.format(fileTemplate, prettierConfig),
+    typeFileTemplate: prettier.format(typeFileTemplate, prettierConfig),
+  };
+};
+
+/**
+ * @Description 生成单个类型模板
+ * @param {*} interfaceName 类型名称
+ * @param {*} interfaceParams 类型参数
+ * @return {*} 类型模板
+ */
+const interfaceTemplate = (interfaceName, interfaceParams) => {
+  let baseTemplate = `export type ${interfaceName} = `;
+  let parametersTemplate = ``;
+  if (interfaceParams.properties) {
+    let propertyKeys = Object.keys(interfaceParams.properties);
+    propertyKeys.forEach((propertyKey) => {
+      let property = interfaceParams.properties[propertyKey];
+      if (property.description) {
+        parametersTemplate += `// ${
+          property.description
+        }\n${propertyKey}: ${dataType(property.type)}\n`;
+      } else {
+        parametersTemplate += `${propertyKey}: ${dataType(property.type)}\n`;
+      }
+    });
+    parametersTemplate = `{\n${parametersTemplate}}`;
+    baseTemplate += parametersTemplate;
+    return baseTemplate;
+  }
 };
 
 // 生成接口文件主函数
@@ -281,23 +387,20 @@ const generateApiFile = async () => {
   }
   // 解析url获得
   let parsed = await parse.parse(process.env.npm_package_config_swaggerUrl);
-  // 类型文件生成
+  // 类型数据解析
   const components = parsed.components;
-  generateType(components);
-
-  // 接口文件生成
+  // generateType(components);
+  // 接口数据解析
   const paths = parsed.paths;
   const pathsKeys = Object.keys(paths);
   const pathsKeysLen = pathsKeys.length;
-  console.log(" ");
   console.log(
-    chalk.blue("开始解析，总共接口数量：") + chalk.yellow(pathsKeysLen)
+    chalk.blue("\n开始解析，总共接口数量：") + chalk.yellow(pathsKeysLen)
   );
-  console.log(chalk.red("----------------------------------------------"));
 
   // 处理swagger数据
   const updatedGroupedData = transformGroupedData(groupedData(paths));
-  generateFiles(updatedGroupedData);
+  generateFiles(updatedGroupedData, components);
 };
 
 // 开始分析swagger并生成接口文件

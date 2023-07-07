@@ -4,6 +4,11 @@
   "description": "swagger接口生成",
   "type": "module",
   "main": "js/index.js",
+  "config": {
+    "swaggerUrl": "http://192.168.1.202:48080/v3/api-docs/all",
+    "apiPath": "/api",
+    "httpDirPath": "@/utils/axios"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "node": "node index.js"
