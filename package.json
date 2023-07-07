@@ -1,6 +1,6 @@
 {
-  "name": "swagger3-api-generator",
-  "version": "1.0.1",
+  "name": "swagger3-typescript-generator",
+  "version": "1.0.2",
   "description": "swagger接口生成",
   "type": "module",
   "main": "js/index.js",
@@ -24,5 +24,9 @@
     "node-fetch": "^3.3.1",
     "swagger-parser": "^10.0.3",
     "prettier": "2.8.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:jinfei-lab/swagger3-typescript-generator.git"
   }
 }
