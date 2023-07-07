@@ -1,9 +1,14 @@
 {
-  "name": "swagger3-api-generator",
-  "version": "1.0.4",
+  "name": "swagger3-typescript-generator",
+  "version": "1.0.2",
   "description": "swagger接口生成",
   "type": "module",
   "main": "js/index.js",
+  "config": {
+    "swaggerUrl": "http://192.168.1.202:48080/v3/api-docs/all",
+    "apiPath": "/api",
+    "httpDirPath": "@/utils/axios"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "node": "node index.js"
@@ -17,6 +22,11 @@
     "@apidevtools/json-schema-ref-parser": "^10.1.0",
     "chalk": "^4.0.0",
     "node-fetch": "^3.3.1",
-    "swagger-parser": "^10.0.3"
+    "swagger-parser": "^10.0.3",
+    "prettier": "2.8.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:jinfei-lab/swagger3-typescript-generator.git"
   }
 }
