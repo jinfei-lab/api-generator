@@ -1,8 +1,8 @@
 import { topConfig, apiConfig, fileDoc } from "./conf.js";
 import fs from "fs";
+import fetch from "node-fetch";
 import path from "path";
 import chalk from "chalk";
-import parse from "swagger-parser";
 import prettier from "prettier";
 import { fileURLToPath } from "url";
 import { prettierConfig } from "./prettierConfig.js";
@@ -396,12 +396,20 @@ const generateApiFile = async () => {
     return;
   }
   // 解析url获得
-  let parsed = await parse.parse(process.env.npm_package_config_swaggerUrl);
+  const swaggerData = await fetch(process.env.npm_package_config_swaggerUrl)
+    .then((res) => res.json())
+    .catch((err) => {
+      console.log(
+        chalk.red(
+          "程序终止：请检查package.json/config.swaggerUrl路径是否正确！"
+        )
+      );
+    });
   // 类型数据解析
-  const components = parsed.components;
+  const components = swaggerData.components;
   // generateType(components);
   // 接口数据解析
-  const paths = parsed.paths;
+  const paths = swaggerData.paths;
   const pathsKeys = Object.keys(paths);
   const pathsKeysLen = pathsKeys.length;
   console.log(
