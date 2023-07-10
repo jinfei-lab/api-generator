@@ -1,6 +1,6 @@
 {
   "name": "swagger3-typescript-generator",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "swagger3文档生成typescript接口网络请求代码",
   "type": "module",
   "main": "js/index.js",
